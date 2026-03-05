@@ -22,6 +22,15 @@ def main():
         contents="Why is Boot.dev such a great place to learn backend development? Use one paragraph maximum.",
     )
 
+    # 4: Check usage_metadata and print token counts
+    usage_metadata = response.usage_metadata
+    if usage_metadata is None:
+        raise RuntimeError("No usage_metadata returned. This likely indicates a failed API request. Check your API key, quota, or try again later.")
+    
+    print(f"Prompt tokens: {usage_metadata.prompt_token_count}")
+    print(f"Response tokens: {usage_metadata.candidates_token_count}")
+
+    print("Response:")
     print(response.text)
 
 if __name__ == "__main__":
