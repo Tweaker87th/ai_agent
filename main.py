@@ -15,9 +15,12 @@ def main():
     print("API Key loaded successfully!")
 
     # 2: Parse command line arguments
+    # NEW: Added --verbose CLI argument
     parser = argparse.ArgumentParser(description="Gemini Chatbot")
     parser.add_argument("user_prompt", type=str, help="User prompt")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
     args = parser.parse_args()
+
 
     # 3. Initialize the Gemini client
     client = genai.Client(api_key=api_key)
@@ -30,22 +33,25 @@ def main():
         )
     ]
 
-    # 5. Interact with the model using messages
+    # 5. Generate content
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=args.user_prompt,
     )
 
     # 6: Check usage_metadata and print token counts
+        # Print prompt info and token counts (verbose only)
     usage_metadata = response.usage_metadata
     if usage_metadata is None:
         raise RuntimeError("No usage_metadata returned. This likely indicates a failed API request. Check your API key, quota, or try again later.")
-    
-    print(f"Prompt tokens: {usage_metadata.prompt_token_count}")
-    print(f"Response tokens: {usage_metadata.candidates_token_count}")
 
-    print("Response:")
+    if args.verbose:
+        print(f"User prompt: {args.user_prompt}")
+        print(f"Prompt tokens: {usage_metadata.prompt_token_count}")
+        print(f"Response tokens: {usage_metadata.candidates_token_count}")
+
     print(response.text)
+
 
 if __name__ == "__main__":
     main()
