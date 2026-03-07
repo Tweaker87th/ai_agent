@@ -1,6 +1,8 @@
 import os
+import argparse
 from dotenv import load_dotenv
 from google import genai
+from google.genai import types
 
 def main():
     # 1. Load configuration from .env
@@ -12,17 +14,29 @@ def main():
 
     print("API Key loaded successfully!")
 
-    # 2. Initialize the Gemini client
+    # 2: Parse command line arguments
+    parser = argparse.ArgumentParser(description="Gemini Chatbot")
+    parser.add_argument("user_prompt", type=str, help="User prompt")
+    args = parser.parse_args()
+
+    # 3. Initialize the Gemini client
     client = genai.Client(api_key=api_key)
 
-    # 3. Interact with the model
-    # Note: Check model name if you get an error (e.g., gemini-1.5-flash)
+    # 4. Build messages list (single user message for now)
+    messages = [
+        types.Content(
+            role="user",
+            parts=[types.Part(text=args.user_prompt)],
+        )
+    ]
+
+    # 5. Interact with the model using messages
     response = client.models.generate_content(
         model="gemini-2.5-flash",
-        contents="Why is Boot.dev such a great place to learn backend development? Use one paragraph maximum.",
+        contents=args.user_prompt,
     )
 
-    # 4: Check usage_metadata and print token counts
+    # 6: Check usage_metadata and print token counts
     usage_metadata = response.usage_metadata
     if usage_metadata is None:
         raise RuntimeError("No usage_metadata returned. This likely indicates a failed API request. Check your API key, quota, or try again later.")
