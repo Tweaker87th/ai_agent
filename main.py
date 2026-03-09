@@ -4,10 +4,9 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 from prompts import system_prompt
-from call_functions import available_functions
+from call_functions import available_functions, call_function
 
 def main():
-    # 1. Load configuration from .env
     load_dotenv()
     api_key = os.environ.get("GEMINI_API_KEY")
 
@@ -16,17 +15,14 @@ def main():
 
     print("API Key loaded successfully!")
 
-    # 2: Parse command line arguments
-    # NEW: Added --verbose CLI argument
     parser = argparse.ArgumentParser(description="Gemini Chatbot")
     parser.add_argument("user_prompt", type=str, help="User prompt")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
     args = parser.parse_args()
 
-    # 3. Initialize the Gemini client
     client = genai.Client(api_key=api_key)
 
-    # 4. Build messages list (single user message for now)
+    # Initialize conversation with user prompt
     messages = [
         types.Content(
             role="user",
@@ -34,34 +30,72 @@ def main():
         )
     ]
 
-    # 5. Generate content
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=messages,
-        config=types.GenerateContentConfig(
-            tools=[available_functions],
-            system_instruction=system_prompt,
-            temperature=0
-        ),
-    )
+    # Max iterations to prevent infinite loops
+    MAX_ITERATIONS = 20
 
-    # 6: Check usage_metadata and print token counts
-        # Print prompt info and token counts (verbose only)
-    usage_metadata = response.usage_metadata
-    if usage_metadata is None:
-        raise RuntimeError("No usage_metadata returned. This likely indicates a failed API request. Check your API key, quota, or try again later.")
+    for iteration in range(MAX_ITERATIONS):
+        # Generate model response
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=messages,
+            config=types.GenerateContentConfig(
+                tools=[available_functions],
+                system_instruction=system_prompt,
+                temperature=0
+            ),
+        )
 
-    # 7: Handle response: function calls OR text
-    function_calls = response.function_calls
-    if function_calls:
-        for function_call in function_calls:
-            print(f"Calling function: {function_call.name}({function_call.args})")
+        # Add model candidates to conversation history
+        if response.candidates:
+            for candidate in response.candidates:
+                messages.append(candidate.content)
+
+        # Handle function calls
+        function_calls = response.function_calls
+        function_responses = []  # Collect results to feed back to model
+
+        if function_calls:
+            for function_call in function_calls:
+                function_call_result = call_function(
+                    function_call, 
+                    verbose=args.verbose,
+                    working_directory="./calculator"
+                )
+                
+                # Validate result structure
+                if not function_call_result.parts:
+                    raise RuntimeError("Function call result has no parts")
+                if function_call_result.parts[0].function_response is None:
+                    raise RuntimeError("Function call result has no function_response")
+                if function_call_result.parts[0].function_response.response is None:
+                    raise RuntimeError("Function call result has no response")
+                
+                # Store response for model
+                function_responses.append(function_call_result.parts[0])
+                
+                # Print result if verbose
+                if args.verbose:
+                    result_str = function_call_result.parts[0].function_response.response.get('result', 'No result')
+                    print(f"-> {result_str}")
+
+            # Feed function results back to model (as "user" messages)
+            messages.append(types.Content(role="user", parts=function_responses))
+
+        else:
+            # No more function calls = final response
+            if args.verbose:
+                print("Final response:")
+            
+            response_text = response.text or "No response text"
+            print(response_text)
+            break
+
     else:
-        if args.verbose:
-            print(f"User prompt: {args.user_prompt}")
-            print(f"Prompt tokens: {usage_metadata.prompt_token_count}")
-            print(f"Response tokens: {usage_metadata.candidates_token_count}")
-        print(response.text)
+        # Max iterations reached without final response
+        print(f"Error: Reached maximum {MAX_ITERATIONS} iterations without final response")
+        import sys
+        sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

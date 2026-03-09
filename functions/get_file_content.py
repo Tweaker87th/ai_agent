@@ -1,6 +1,6 @@
 import os
 from config import MAX_FILE_READ_CHARS
-
+from google.genai import types
 
 def get_file_content(working_directory, file_path):
     """
@@ -35,3 +35,20 @@ def get_file_content(working_directory, file_path):
 
     except Exception as e:
         return f"Error: {e}"
+
+# Function schema for LLM tool calling
+schema_get_file_content = types.FunctionDeclaration(
+    name="get_file_content",
+    description="Reads the contents of a file (up to 10000 characters relative to the working directory",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "file_path": types.Schema(
+                type=types.Type.STRING,
+                description="Path to the file to read, relative to the working directory",
+                ),
+            },
+            required=["file_path"],
+        ),
+    )
+   
